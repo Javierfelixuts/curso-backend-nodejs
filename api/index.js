@@ -1,7 +1,9 @@
 const express = require('express');
 const cors = require('cors');
+const connection = require('./database/config');
 const routerApi = require('./routes');
-
+const { join } = require('node:path');
+const http = require('http');
 const { logErrors, errorHandler, boomErrorHandler } = require('./middlewares/error.handler');
 
 const app = express();
@@ -9,7 +11,7 @@ const port = process.env.PORT || 3000;
 
 app.use(express.json());
 
-const whitelist = ['http://localhost:8080'];
+const whitelist = ['*'];
 const options = {
   origin: (origin, callback) => {
     if (whitelist.includes(origin) || !origin) {
@@ -22,6 +24,7 @@ const options = {
 app.use(cors(options));
 
 app.get('/api', (req, res) => {
+  
   res.send('Hola mi server en express');
 });
 
@@ -36,40 +39,20 @@ app.use(boomErrorHandler);
 app.use(errorHandler);
 
 
-app.listen(port, () => {
-  console.log('Mi port' +  port);
-});
 
-
-
-
-
-
-
-
-
-const http = require('http');
-
-//const config = require("./app/config/config.js");
-const config = {};
 
 app.use(express.urlencoded({ extended: true }));
 
-
-app.get("/", (req, res) => {
-    res.json({ success: true, message: "Server node js" });
+app.get('/', (req, res) => {
+  res.sendFile(join(__dirname, 'index.html'));
 });
 
-
-app.post("/lessons", (req, res) => {
-    console.log('update');
-    if (!req.body) {
-        res.status(400).send({
-            message: "Content can not be empty!"
-        });
-    }
-    config.SOKECT_IO.emit('updateLesson', req.body);
-    res.json(req.body);
+app.post('/notifications', (req, res) => {
+  console.log("req: ", req.body)
+  io.emit('notification', {
+    notification: req.body
+  })
+  res.status(200).json({ message: "Solicitud procesada con éxito" });
 });
 
 
@@ -80,12 +63,28 @@ var io = require('socket.io')(server, {
         origin: '*',
     }
 });
-config.SOKECT_IO = io;
 
-server.listen(app.get('port'), () => {
-    console.log('Running server');
-});
+
 
 io.on('connect', async(socket) => {
-    console.log('Connected socket');
+  connection.query('SELECT * FROM notifications', function(err, rows, fields) {
+    if (err) throw err;
+
+    socket.emit('init', {
+      message: rows
+    })
+
+  });
+
+    
+    
+
+    socket.on('chat:message', (data) => {
+      io.emit('chat:message', data)
+    })
+});
+
+
+server.listen(port, () => {
+  console.log('Running server');
 });
